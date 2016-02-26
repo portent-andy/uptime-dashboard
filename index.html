@@ -1,0 +1,130 @@
+<html>
+<head>
+    <title>Uptime Dashboard</title>
+    <link rel="stylesheet" href="style.css" type="text/css">
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script type="text/javascript">
+    var appURL = "http://localhost.com/uptime-dashboard/";
+    var refreshMS = 180000; // check domains every 3 minutes. 3 * 60 * 1000 = 180000
+    
+    var domainsArr = [];
+    var file = "domains.txt";
+    function generateDomainArr() {
+        $.get(file,function(txt){
+            var lines = txt.split("\n");
+            for (var i = 0, len = lines.length; i < len; i++) {
+                if (lines[i].trim() != '')
+                    domainsArr.push(lines[i].trim());
+            }
+            processDomains();
+        });
+    }
+    function processDomains() {
+        $('#statusTable > tbody').html('');
+        for (var i = 0, len = domainsArr.length; i < len; i++) {
+            checkDomain(domainsArr[i]);
+        }
+    }
+    function checkDomain(domain) {
+        $.get(appURL + "checkDomain.php?domain=" + domain,function(result) {
+            var now = new Date($.now());
+            var now_format = (now.getMonth()+1)  + "/"
+                                + now.getDate() + "/"
+                                + now.getFullYear() + " @ "  
+                                + now.getHours() + ":"  
+                                + now.getMinutes();                                
+            if (result == "-1") {
+                $('#statusTable > tbody:last').append('<tr><td class="red"><a href="' + domain + '" target="_blank">' + domain + '</a></td><td class="red">DOWN</td><td class="red">' + now_format + '</td><td width="10px"><a href="#" class="deleteDomainHref" data-domain="' + domain + '"><i class="icon-delete" title="Delete URL"></i></a></tr>');
+            } else {
+                var color = "green";
+                var response_color = "green";
+                if (result >= 1000)
+                    response_color = "red";
+                else if (result >= 400)
+                    response_color = "gold";
+                
+                $('#statusTable > tbody:last').append('<tr><td class="' + color + '"><a href="' + domain + '" target="_blank">' + domain + '</a></td><td class="' + response_color + '">' + result + ' ms</td><td class="' + color + '">' + now_format + '</td><td width="10px"><a href="#" class="deleteDomainHref" data-domain="' + domain + '"><i class="icon-delete" title="Delete URL"></i></a></tr>');
+            }
+        });
+    }
+    $(document).ready(function() {
+        // generate the domain array from domains file
+        generateDomainArr();
+        
+        // check domains every X milliseconds, defined above
+        window.setInterval(function() {
+            processDomains();
+        }, refreshMS);
+        
+        $("#submitDomain").on("click", function (e) {
+            if ($("#addDomain").val().indexOf("http://") > -1 || $("#addDomain").val().indexOf("https://") > -1) {
+                var newDomain = $("#addDomain").val().trim();
+                if (newDomain.substr(-1) === '/') {
+                    newDomain = newDomain.substr(0, newDomain.length - 1);
+                    $("#addDomain").val(newDomain);
+                }
+                $('#addDomainForm').attr('action', appURL + "addDomain.php");
+                $("#addDomainForm").submit();
+                $('#addResult').toggle();
+                $('#addResult').fadeOut(5000);
+                e.preventDefault();
+                domainsArr.push(newDomain);
+                processDomains();
+            } else {
+                $('#error').toggle();
+                $('#error').fadeOut(5000);
+            }
+        });
+        $("#statusTable > tbody").on("click", "a.deleteDomainHref", function (e) {
+            $("#deleteDomain").val($(this).attr('data-domain'));
+            $('#deleteDomainForm').attr('action', appURL + "deleteDomain.php");
+            $("#deleteDomainForm").submit();
+            e.preventDefault();
+            $('#deleteResult').toggle();
+            $('#deleteResult').fadeOut(5000);
+            var element_index = domainsArr.indexOf($(this).attr('data-domain'));
+            if (element_index >= 0) {
+              domainsArr.splice( element_index, 1 );
+            }
+            processDomains();
+        });
+    });
+</script>
+</head>
+<body>
+    <section class="header">
+        <img src="img/logo.png" border="0" height="49" />
+        <br />UPTIME DASHBOARD
+    </section>
+    
+    <section class="main">
+        <table id="statusTable" cellspacing='0'>
+            <thead>
+            <tr>
+                <th>Domain</th>
+                <th>Response</th>
+                <th>Last Checked</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody id="results"></tbody>
+        </table>
+        <form name="deleteDomainForm" id="deleteDomainForm" target="hiddenIframe" method="post">
+            <input type="hidden" name="deleteDomainForm" value="" />
+            <input type="hidden" name="deleteDomain" id="deleteDomain" value="" />
+        </form>
+    </section>
+    
+    <section class="add">
+        <form name="addDomainForm" id="addDomainForm" target="hiddenIframe" method="post">
+            <input type="hidden" name="addDomainForm" value="" />
+            <input type="text" name="addDomain" id="addDomain" value="" placeholder="http://www.portent.com" />
+            <input type="button" name="submitDomain" id="submitDomain" value="Add Domain" />
+        </form>
+        <div id="error" class="red" style="display:none">Please enter a valid URL, including the protocol (http://)</div>
+        <div id="addResult" class="green" style="display:none">URL successfully added</div>
+        <div id="deleteResult" class="green" style="display:none">URL successfully removed</div>
+        <iframe name="hiddenIframe" width="0" height="0" border="0" style="display:none"></iframe>
+    </section>
+</body>
+</html>
